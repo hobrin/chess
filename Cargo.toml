@@ -1,0 +1,13 @@
+[package]
+name = "chess"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ggez = "0.9.3"
+glam = { version = "0.21", features = ["mint"] }
+lazy_static = "1.4"
+hashbrown = "0.11"
+bitintr = { version = "0.3.0" }
