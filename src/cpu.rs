@@ -1,7 +1,11 @@
-use crate::*;
+use crate::{*, util::BitIter};
+use std::hash;
 use std::time::{SystemTime, UNIX_EPOCH};
+use rand::rngs::ThreadRng;
+use rand::Rng;
 
-pub fn calculate_best_move(board: &mut Board, evaluations: &mut usize, depth: usize, max_depth: usize, norm: i32, is_cpu_white: bool) -> (i32, (usize, usize)) {
+
+pub fn calculate_best_move(board: &mut Board, evaluations: &mut usize, depth: usize, max_depth: usize, norm: i32, is_cpu_white: bool, beta: bool, rng: &mut ThreadRng) -> (i32, (usize, usize)) {
     *evaluations += 1;
     let mut move_score = board.rate_board();
     move_score *= (board.is_whites_turn as i32)*2-1;
@@ -13,11 +17,8 @@ pub fn calculate_best_move(board: &mut Board, evaluations: &mut usize, depth: us
     let mut best_move_score: i32 = std::i32::MIN / 10;
 
     let mut total_options: u32 = 0;
-    for pos in 0..64usize {
-        if util::is_piece_white(board.board_pos[pos]) != board.is_whites_turn {
-            continue;
-        }
-
+    
+    for pos in util::BitIter::new(board.get_friendly_pieces_for(board.is_whites_turn)) {
         let options_timer = profiler::start_timing("options_searching");
         let options = board.get_moveable_squares(pos);
         options_timer.stop();
@@ -28,6 +29,16 @@ pub fn calculate_best_move(board: &mut Board, evaluations: &mut usize, depth: us
             board_2.score = (board.score as f32 * 1.01) as i32;
             clone_timer.stop();
 
+            //check for draws.
+            let hash_board = board_2.hash_board();
+            let mut is_game_finished: bool = false;
+            // for i in 0..=board_2.check_for_draws_idx {
+            //     if board_2.check_for_draws[i] == hash_board {
+            //         is_game_finished = true;
+            //         board_2.score = 0;
+            //     }
+            // }
+
             let nothing = profiler::start_timing("nothing");
             nothing.stop();
 
@@ -35,13 +46,12 @@ pub fn calculate_best_move(board: &mut Board, evaluations: &mut usize, depth: us
             let is_capture = board_2.move_square(pos, target);
             move_timer.stop();
 
-            if !is_capture && depth <= 1 && board.is_whites_turn {
-                continue;
+            if !is_game_finished {
+                let (mut move_score, _) = 
+                    calculate_best_move(&mut board_2, evaluations, depth-(!is_capture as usize), max_depth-1, norm*-1, is_cpu_white, beta, rng);
+                move_score *= -1;
             }
-            let (mut move_score, _) = 
-                calculate_best_move(&mut board_2, evaluations, depth-(!is_capture as usize), max_depth-1, norm*-1, is_cpu_white);
-            move_score *= -1;
-            if move_score > best_move_score {
+            if move_score > best_move_score || (crate::RANDOM && move_score == best_move_score && rng.gen_bool(0.5)){
                 best_move = (pos, target);
                 best_move_score = move_score;
             }
@@ -57,11 +67,12 @@ pub fn calculate_best_move(board: &mut Board, evaluations: &mut usize, depth: us
     (best_move_score + total_options as i32, best_move)
 }
 
-pub fn make_bot_move(game: &mut crate::render::Game) {
+pub fn make_bot_move(game: &mut crate::render::Game, beta: bool) {
+    let mut RNG = rand::thread_rng();
     let total_timer = profiler::start_timing("total");
     let is_cpu_white = game.board.is_whites_turn;
     let mut evaluations: usize = 0;
-    let (mut norm, _) = cpu::calculate_best_move(&mut game.board, &mut evaluations, crate::NORM_EXPLR_DEPTH, crate::NORM_EXPLR_DEPTH, -100_000, is_cpu_white);
+    let (mut norm, _) = cpu::calculate_best_move(&mut game.board, &mut evaluations, crate::NORM_EXPLR_DEPTH, crate::NORM_EXPLR_DEPTH, -100_000, is_cpu_white, beta, &mut RNG);
     norm -= crate::NORM;
     // println!("{}", norm);
     let mut depth = crate::DEPTH;
@@ -71,7 +82,7 @@ pub fn make_bot_move(game: &mut crate::render::Game) {
     let mut to;
     loop {
         let bef = SystemTime::now();
-        (score, (from, to)) = cpu::calculate_best_move(&mut game.board, &mut evaluations, depth, max_depth, norm, is_cpu_white);
+        (score, (from, to)) = cpu::calculate_best_move(&mut game.board, &mut evaluations, depth, max_depth, norm, is_cpu_white, beta, &mut RNG);
         if bef.elapsed().unwrap().as_millis() > 100 {
             break;
         }
@@ -82,7 +93,7 @@ pub fn make_bot_move(game: &mut crate::render::Game) {
 
     total_timer.stop();
     println!("CPU score is: {}", score);
-    game.board.move_square(from, to);
+    game.move_square(from, to);
     println!("CPU score rn is: {}", game.board.rate_board());
     profiler::print();
 }

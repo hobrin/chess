@@ -264,7 +264,7 @@ lazy_static! {
                 // moves[pos][obstruction_idx as usize] = cur_move;
             }
         }
-        println!("initialised rook obstruction!");
+        println!("initialised rook self obstruction!");
         obstruct_map
     };
     pub static ref ROOK_OBSTRUCTION_OPPONENT_MAP: Vec<Vec<u64>> = {
@@ -353,7 +353,7 @@ lazy_static! {
                 obstruct_map[pos].push(cur_move);
             }
         }
-        println!("initialised rook obstruction!");
+        println!("initialised bishop self obstruction!");
         obstruct_map
     };
     pub static ref BISHOP_OBSTRUCTION_OPPONENT_MAP: Vec<Vec<u64>> = {
@@ -383,7 +383,7 @@ lazy_static! {
                 obstruct_map[pos].push(cur_move);
             }
         }
-        println!("initialised rook obstruction!");
+        println!("initialised bishop obstruction!");
         obstruct_map
     };
     pub static ref WHITE_PAWN_CAPTURES: [u64; 64] = {
@@ -432,14 +432,27 @@ lazy_static! {
     };
 }
 
+
+const POS_TO_XY: [(usize, usize); 64] = [
+    (0, 0), (1, 0), (2, 0), (3, 0), (4, 0), (5, 0), (6, 0), (7, 0), 
+    (0, 1), (1, 1), (2, 1), (3, 1), (4, 1), (5, 1), (6, 1), (7, 1), 
+    (0, 2), (1, 2), (2, 2), (3, 2), (4, 2), (5, 2), (6, 2), (7, 2), 
+    (0, 3), (1, 3), (2, 3), (3, 3), (4, 3), (5, 3), (6, 3), (7, 3), 
+    (0, 4), (1, 4), (2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4), 
+    (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5), 
+    (0, 6), (1, 6), (2, 6), (3, 6), (4, 6), (5, 6), (6, 6), (7, 6), 
+    (0, 7), (1, 7), (2, 7), (3, 7), (4, 7), (5, 7), (6, 7), (7, 7), 
+];
 pub fn pos_to_xy(pos: usize) -> (usize, usize) {
     (pos % 8, pos / 8)
+    // POS_TO_XY[pos]
 }
 
 pub fn pos_to_vec(pos: usize) -> Vec2 {
+    let (x, y) = pos_to_xy(pos);
     Vec2 {
-        x: (pos % 8) as f32,
-        y: (pos / 8) as f32,
+        x: x as f32,
+        y: y as f32,
     }
 }
 
@@ -494,7 +507,6 @@ pub fn bitboard_to_vec(mut board: u64) -> Vec<usize> {
         i+=1;
     }
 }
-
 pub struct BitIter {
     board: u64,
     prev_shift: usize,
@@ -518,4 +530,8 @@ impl Iterator for BitIter {
         self.board = fix_shr(self.board, idx as u32+1);
         Some(self.prev_shift-1)
     }
+}
+
+pub fn sigmoid(x: f32) -> f32 {
+    1.0 / (1.0 + f32::exp(-x))
 }

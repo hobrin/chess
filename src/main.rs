@@ -4,6 +4,7 @@ mod board_fast;
 mod util;
 mod cpu;
 mod profiler;
+mod test;
 
 // 1 king,
 // 2 queen,
@@ -16,7 +17,8 @@ pub type Board = board_fast::Board;
 pub const DEPTH: usize = 4;
 pub const MAX_DEPTH: usize = 5;
 pub const NORM_EXPLR_DEPTH: usize = 2;
-pub const NORM: i32 = 320;
+pub const NORM: i32 = 340;
+pub const RANDOM: bool = true;
 
 pub const NOTHING: usize = 0;
 pub const KING: usize = 1;

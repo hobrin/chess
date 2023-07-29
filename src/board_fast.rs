@@ -34,6 +34,8 @@ pub struct Board {
     pub black_bitboard: u64,
     // pub pieces_bitboard: [u64; 13],
     pub score: i32,
+    pub check_for_draws: [u64; 75], //this works for 75 moves.
+    pub check_for_draws_idx: usize,
 }
 impl Clone for Board {
     fn clone(&self) -> Board {
@@ -46,6 +48,8 @@ impl Clone for Board {
             score: self.score,
             white_bitboard: self.white_bitboard,
             black_bitboard: self.black_bitboard,
+            check_for_draws: self.check_for_draws,
+            check_for_draws_idx: self.check_for_draws_idx,
             // pieces_bitboard: self.pieces_bitboard,
         }
     }
@@ -79,6 +83,8 @@ impl Board {
             score: 0,
             white_bitboard,
             black_bitboard,
+            check_for_draws: [0u64; 75],
+            check_for_draws_idx: 0usize,
             // pieces_bitboard,
         }
     }
@@ -97,13 +103,19 @@ impl Board {
             self.black_bitboard
         }
     }
+    pub fn hash_board(&self) -> u64 {
+        self.black_bitboard & self.white_bitboard
+    }
     pub fn move_square(self: &mut Board, old: usize, new: usize) -> bool {
         let mut piece = self.board_pos[old];
+        self.score -= util::PIECE_VALUES_POSITION[piece][old];
         let is_white = util::is_piece_white(piece);
+        let mut is_reversible_move = true;
         self.en_passant = 0;
         match util::PIECE_TO_COLOURLESS[piece] {
             crate::KING => {
-                *self.has_king_moved_mut(util::is_piece_white(piece)) = true;
+                is_reversible_move &= !self.has_king_moved(is_white);
+                *self.has_king_moved_mut(is_white) = true;
                 if util::pos_to_xy(old).0.abs_diff(util::pos_to_xy(new).0) == 2 {
                     let rook_x = if util::pos_to_xy(old).0 < util::pos_to_xy(new).0 {
                         7usize
@@ -117,6 +129,7 @@ impl Board {
                 }
             }
             crate::PAWN => {
+                is_reversible_move = false;
                 if util::pos_to_xy(old).1 % 5 == 1 { //Fancy schmanzy check if on second or seventh rank
                     if util::pos_to_xy(new).1 == 3 || util::pos_to_xy(new).1 == 4 {
                         self.en_passant = new;
@@ -130,15 +143,21 @@ impl Board {
         }
         let captured_piece = self.board_pos[new];
         let is_capture = captured_piece > 0;
+        is_reversible_move &= !is_capture;
         self.score -= util::PIECE_VALUES_POSITION[captured_piece][new];
         self.score += util::PIECE_VALUES_POSITION[piece][new];
-        self.score -= util::PIECE_VALUES_POSITION[piece][old];
         // self.pieces_bitboard[captured_piece] ^= 1<<new;
         // self.pieces_bitboard[piece] ^= 1<<old;
         // self.pieces_bitboard[piece] |= 1<<new;
         *self.get_friendly_pieces_for_mut(!is_white) &= !(1<<new); //register opponent gone
         *self.get_friendly_pieces_for_mut(is_white) ^= 1<<old; //register piece himself no longer there
         *self.get_friendly_pieces_for_mut(is_white) |= 1<<new; //register piece at new location
+
+        self.check_for_draws[self.check_for_draws_idx] = self.hash_board();
+        self.check_for_draws_idx += 1;
+        if !is_reversible_move {
+            self.check_for_draws_idx = 0;
+        }
 
         self.board_pos[new] = piece;
         self.board_pos[old] = 0;
@@ -237,24 +256,24 @@ impl Board {
     }
     pub fn get_moveable_squares_with_checks(self: &Board, pos: usize) -> u64 {
         let mut moveable = self.get_moveable_squares(pos);
-        let is_white = self.white_bitboard & (1 << pos) > 0;
-        if util::PIECE_TO_COLOURLESS[self.board_pos[pos]] == crate::KING {
-            moveable &= !(
-                util::BitIter::new(self.get_friendly_pieces_for(!is_white))
-                .fold(0u64, |old, pos| old|self.get_moveable_squares(pos))
-            );
-        } else {
-            let king_pos = (0..64usize).filter(|&pos| {
-                let piece = self.board_pos[pos];
-                util::PIECE_TO_COLOURLESS[self.board_pos[pos]] == crate::KING
-                && (util::is_piece_white(piece) == is_white)
-            }).collect::<Vec<usize>>()[0];
-            let is_in_check = util::BitIter::new(self.get_friendly_pieces_for(is_white))
-                .any(|pos| (self.get_moveable_squares(pos) & (1<<king_pos)) > 0);
-            if is_in_check {
-                moveable = 0;
-            }
-        }
+        // let is_white = self.white_bitboard & (1 << pos) > 0;
+        // if util::PIECE_TO_COLOURLESS[self.board_pos[pos]] == crate::KING {
+            // moveable &= !(
+                // util::BitIter::new(self.get_friendly_pieces_for(!is_white))
+                // .fold(0u64, |old, pos| old|self.get_moveable_squares(pos))
+            // );
+        // } else {
+            // let king_pos = (0..64usize).filter(|&pos| {
+                // let piece = self.board_pos[pos];
+                // util::PIECE_TO_COLOURLESS[self.board_pos[pos]] == crate::KING
+                // && (util::is_piece_white(piece) == is_white)
+            // }).collect::<Vec<usize>>()[0];
+            // let is_in_check = util::BitIter::new(self.get_friendly_pieces_for(is_white))
+                // .any(|pos| (self.get_moveable_squares(pos) & (1<<king_pos)) > 0);
+            // if is_in_check {
+                // moveable = 0;
+            // }
+        // }
         moveable
     }
     pub fn rate_board(&self) -> i32 {
